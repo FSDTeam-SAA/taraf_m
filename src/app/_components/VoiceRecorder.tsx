@@ -170,12 +170,12 @@ export default function VoiceRecorder() {
   return (
     <div className="lg:max-w-[500px] mx-auto w-full overflow-hidden bg-black text-white p-8 rounded-lg">
       {/* Arabic Quote */}
-      <div className="text-center mb-8">
-        <div className="text-4xl mb-2">&quot;</div>
-        <p className="text-lg leading-relaxed" dir="rtl">
+      <div className="text-right mb-8 max-w-sm">
+        <div className="text-4xl text-right">&quot;</div>
+        <p className="text-3xl leading-relaxed text-center -mt-7" dir="rtl">
           وش تفكر فيه وأنت تسوق؟
         </p>
-        <div className="text-4xl mt-2 text-right">&quot;</div>
+        <div className="text-4xl text-left">&quot;</div>
       </div>
 
       {/* Microphone Button */}
