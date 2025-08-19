@@ -18,9 +18,9 @@ export default function ArabicLogo() {
         </div>
       </div>
 
-      <div className="text-white text-sm font-light tracking-wider mt-28">
+      <a href={process.env.NEXT_PUBLIC_NASS_WEBSITE} target="_blank" className="text-white text-sm font-light tracking-wider mt-28">
         Nass.sa
-      </div>
+      </a>
     </div>
   );
 }

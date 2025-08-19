@@ -1,105 +1,171 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Mic, Play, RotateCcw } from "lucide-react"
+import { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Mic, Play, RotateCcw } from "lucide-react";
+import emailjs from "@emailjs/browser";
+import { useEdgeStore } from "@/lib/edgestore";
 
 export default function VoiceRecorder() {
-  const [isRecording, setIsRecording] = useState(false)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
-  const [isAgreed, setIsAgreed] = useState(false)
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [isAgreed, setIsAgreed] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const { edgestore } = useEdgeStore();
 
   useEffect(() => {
+    // Initialize EmailJS
+    if (process.env.NEXT_PUBLIC_EMAILJS_USER_ID) {
+      emailjs.init(process.env.NEXT_PUBLIC_EMAILJS_USER_ID);
+    }
+
     return () => {
       if (timerRef.current) {
-        clearInterval(timerRef.current)
+        clearInterval(timerRef.current);
       }
-    }
-  }, [])
+    };
+  }, []);
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = mediaRecorder
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
 
-      const chunks: BlobPart[] = []
+      const chunks: BlobPart[] = [];
       mediaRecorder.ondataavailable = (event) => {
-        chunks.push(event.data)
-      }
+        chunks.push(event.data);
+      };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "audio/wav" })
-        setAudioBlob(blob)
-        stream.getTracks().forEach((track) => track.stop())
-      }
+        const blob = new Blob(chunks, { type: "audio/wav" });
+        setAudioBlob(blob);
+        stream.getTracks().forEach((track) => track.stop());
+      };
 
-      mediaRecorder.start()
-      setIsRecording(true)
-      setRecordingTime(0)
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      setSendStatus(null);
 
       timerRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1)
-      }, 1000)
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
     } catch (error) {
-      console.error("Error accessing microphone:", error)
+      console.error("Error accessing microphone:", error);
+      setSendStatus({
+        success: false,
+        message: "خطأ في الوصول إلى الميكروفون",
+      });
     }
-  }
+  };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
       if (timerRef.current) {
-        clearInterval(timerRef.current)
+        clearInterval(timerRef.current);
       }
     }
-  }
+  };
 
   const toggleRecording = () => {
     if (isRecording) {
-      stopRecording()
+      stopRecording();
     } else {
-      startRecording()
+      startRecording();
     }
-  }
+  };
 
   const playRecording = () => {
     if (audioBlob && !isPlaying) {
-      const audioUrl = URL.createObjectURL(audioBlob)
-      audioRef.current = new Audio(audioUrl)
-      audioRef.current.play()
-      setIsPlaying(true)
+      const audioUrl = URL.createObjectURL(audioBlob);
+      audioRef.current = new Audio(audioUrl);
+      audioRef.current.play();
+      setIsPlaying(true);
 
       audioRef.current.onended = () => {
-        setIsPlaying(false)
-        URL.revokeObjectURL(audioUrl)
-      }
+        setIsPlaying(false);
+        URL.revokeObjectURL(audioUrl);
+      };
     }
-  }
+  };
 
   const refreshRecording = () => {
-    setAudioBlob(null)
-    setRecordingTime(0)
-    setIsPlaying(false)
+    setAudioBlob(null);
+    setRecordingTime(0);
+    setIsPlaying(false);
+    setSendStatus(null);
     if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current = null
+      audioRef.current.pause();
+      audioRef.current = null;
     }
-  }
+  };
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, "0")}`
-  }
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const sendRecording = async () => {
+    if (!audioBlob || !isAgreed) return;
+
+    setIsSending(true);
+    setSendStatus(null);
+
+    const audioFile = new File([audioBlob], "recording.wav", {
+      type: "audio/wav",
+      lastModified: Date.now(),
+    });
+
+    const res = await edgestore.publicFiles.upload({
+      file: audioFile,
+      options : {
+        
+      }
+    });
+
+    console.log(res);
+
+    const download_link = res.url;
+
+    try {
+      await emailjs.send(
+        process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID || "",
+        process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID || "",
+        {
+          download_link,
+        }
+      );
+
+      setSendStatus({
+        success: true,
+        message: "تم إرسال التسجيل بنجاح!",
+      });
+    } catch (error) {
+      console.error("Error sending email:", error);
+      setSendStatus({
+        success: false,
+        message: "فشل إرسال التسجيل. يرجى المحاولة مرة أخرى.",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
     <div className="lg:max-w-[500px] mx-auto w-full overflow-hidden bg-black text-white p-8 rounded-lg">
@@ -117,10 +183,16 @@ export default function VoiceRecorder() {
         <button
           onClick={toggleRecording}
           className={`w-20 h-20 rounded-full flex items-center justify-center transition-colors ${
-            isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gray-300 hover:bg-gray-400"
+            isRecording
+              ? "bg-red-500 hover:bg-red-600"
+              : "bg-gray-300 hover:bg-gray-400"
           }`}
         >
-          <Mic className={`w-8 h-8 ${isRecording ? "text-white" : "text-gray-700"}`} />
+          <Mic
+            className={`w-8 h-8 ${
+              isRecording ? "text-white" : "text-gray-700"
+            }`}
+          />
         </button>
       </div>
 
@@ -128,6 +200,19 @@ export default function VoiceRecorder() {
       <div className="text-center mb-6">
         <span className="text-lg font-mono">{formatTime(recordingTime)}</span>
       </div>
+
+      {/* Status Message */}
+      {sendStatus && (
+        <div
+          className={`mb-4 p-3 rounded text-center ${
+            sendStatus.success
+              ? "bg-green-800 text-green-100"
+              : "bg-red-800 text-red-100"
+          }`}
+        >
+          {sendStatus.message}
+        </div>
+      )}
 
       {/* Controls */}
       <div className="flex items-center justify-between mb-8">
@@ -152,20 +237,24 @@ export default function VoiceRecorder() {
 
         {/* Send Button */}
         <Button
-          disabled={!isAgreed || !audioBlob}
+          onClick={sendRecording}
+          disabled={!isAgreed || !audioBlob || isSending}
           className={`px-6 py-2 rounded-lg transition-colors ${
-            isAgreed && audioBlob
+            isAgreed && audioBlob && !isSending
               ? "bg-white text-black hover:bg-gray-200"
               : "bg-gray-600 text-gray-400 cursor-not-allowed"
           }`}
         >
-          ارسال
+          {isSending ? "جاري الإرسال..." : "ارسال"}
         </Button>
       </div>
 
       {/* Refresh Button */}
       <div className="flex justify-start mb-6">
-        <button onClick={refreshRecording} className="text-gray-400 hover:text-white transition-colors">
+        <button
+          onClick={refreshRecording}
+          className="text-gray-400 hover:text-white transition-colors"
+        >
           <RotateCcw className="w-5 h-5" />
         </button>
       </div>
@@ -179,16 +268,19 @@ export default function VoiceRecorder() {
             onCheckedChange={(checked) => setIsAgreed(checked as boolean)}
             className="mt-1"
           />
-          <label htmlFor="agreement" className="text-sm leading-relaxed cursor-pointer">
+          <label
+            htmlFor="agreement"
+            className="text-sm leading-relaxed cursor-pointer"
+          >
             أوافق
           </label>
         </div>
 
         <p className="text-xs text-gray-400 leading-relaxed" dir="rtl">
-          بالضغط على إرسال، فإنك توافق على معالجة التسجيل الصوتي لتحسين تجربة المستخدم - قد يتم حفظ أو مراجعة أو حذف
-          التسجيل حسب سياسة الخصوصية
+          بالضغط على إرسال، فإنك توافق على معالجة التسجيل الصوتي لتحسين تجربة
+          المستخدم - قد يتم حفظ أو مراجعة أو حذف التسجيل حسب سياسة الخصوصية
         </p>
       </div>
     </div>
-  )
+  );
 }
