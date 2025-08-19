@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "all" : "git push origin main && git push vercel"
   },
   "dependencies": {
     "@edgestore/react": "^0.5.3",
